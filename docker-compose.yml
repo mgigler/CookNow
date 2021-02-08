@@ -1,0 +1,91 @@
+version: '3.1'
+
+networks:
+  cooknow:
+
+volumes:
+  cooknow-db:
+    driver: local
+
+services:
+
+  portainer:
+    image: "portainer/portainer:latest"
+    command: -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./persistent-data/portainer:/data:rw
+    environment:
+      - CAP_HOST_MANAGEMENT=1
+    ports:
+      - "9201:9000"
+
+  app:
+    build: ./app
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    stdin_open: true
+    networks:
+      - cooknow
+
+  api:
+    build: ./api
+    restart: always
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./api:/api
+      - /api/node_modules
+    depends_on:
+      - mongo
+    networks:
+      - cooknow
+
+  mongo:
+    image: mongo:latest
+    restart: always
+    env_file:
+      - db.env
+    volumes:
+      - cooknow-db:/data/db
+      - ./docker-scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - cooknow
+
+  mongo-express:
+    image: mongo-express:latest
+    restart: always
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongo
+    env_file:
+      - db.env
+    networks:
+      - cooknow
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    restart: always
+    expose:
+      - 9000
+    ports:
+      - "9001:9000"
+    volumes:
+      - ./minio-data:/data
+    command: server /data
+    env_file:
+      - db.env
+    networks:
+      - cooknow
+  
